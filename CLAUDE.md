@@ -63,6 +63,14 @@ A única interação com o YouTube que o usuário pode alcançar é play/pause. 
 
 **Não existe painel cobrindo o quadro na pausa, e não deve ser adicionado.** Foi testado: o overlay de pausa do YouTube (cabeçalho, marca, grade de sugestões) depende de evento de mouse nascido **dentro** do iframe, e `pointer-events: none` garante que nenhum chegue lá — a pausa via `postMessage` não conta como interação. Medição em Chrome e WebKit, 25 s pausado: capturas byte a byte idênticas, quadro limpo. Ou seja, a barreira de ponteiro já cobre esse vetor de graça. Um painel opaco ali só produz tela preta ao pausar, escondendo o frame do filme sem esconder nada do YouTube. `rel: 0` apenas restringe a grade ao mesmo canal e `modestbranding` foi descontinuado em 2023 — não conte com nenhum dos dois.
 
+### No iPhone o som começa desligado, e só nele
+
+Ativação de usuário não atravessa a fronteira de origem: o toque acontece no documento desta página, não no do YouTube, e por isso o iOS recusa o `playVideo()` enviado por `postMessage`. A saída é nascer mudo — reprodução sem som é o único caso que o iOS libera sem gesto dentro do iframe. Daí `mute: isIosPhone() ? 1 : 0`: nos demais aparelhos o `postMessage` é aceito e começar mudo só pioraria o trailer.
+
+`onPlayerState()` chama `unMute()` no **primeiro** `PLAYING`, quando o vídeo já corre e nenhuma política se aplica; `pendingUnmute` garante uma vez só, para não desfazer a escolha de quem silenciar depois. **Não leia `isMuted()` logo após `unMute()`** — é `postMessage`, o estado não voltou ainda neste tick, e a leitura sai errada (já quebrou o ícone do som uma vez). Se o `unMute()` for recusado, o botão de som resolve, aí com gesto do usuário por trás.
+
+Isso não devolve o **fullscreen nativo** do iOS, que continua exigindo gesto nascido dentro do iframe e não tem contorno: o iPhone segue na rota `.is-fs` + `is-rotated`.
+
 ### O iPhone já teve um caminho próprio; não reintroduzir
 
 Houve uma exceção só para iPhone: escudo removido e `playsinline: 0`, para que o toque nascesse **dentro** do iframe e o iOS concedesse o fullscreen nativo (`playVideo()` por `postMessage` não atravessa a fronteira de origem). Foi **removida de propósito** — era o único ponto em que a interface do YouTube ficava tocável. O iPhone agora segue a rota comum e cai na contingência que já existia: `requestFullscreen` no `.dialog` falha no WebKit → `.is-fs` cobre a viewport por CSS → `screen.orientation.lock` é negado → `is-rotated` gira 90°.

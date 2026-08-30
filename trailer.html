@@ -722,6 +722,15 @@
                 var ticker = null;
                 var seeking = false;
 
+                /* iPad fica de fora de propósito: ele aceita playVideo() por postMessage
+                   como qualquer desktop. A regra vale para todo navegador do iPhone, não
+                   só o Safari — no iOS todos usam o mesmo WebKit e herdam a política. */
+                function isIosPhone() {
+                    return /iP(hone|od)/.test(navigator.userAgent || "");
+                }
+                /* Só o iPhone começa mudo, e só ele precisa do som de volta depois. */
+                var pendingUnmute = isIosPhone();
+
                 var dialog = document.querySelector(".dialog");
                 var mask = document.getElementById("trailer-mask");
                 var fallback = document.getElementById("trailer-fallback");
@@ -778,6 +787,13 @@
                 function playerVars() {
                     var vars = {
                         autoplay: 1,
+                        /* Mudo só no iPhone. Ativação de usuário não atravessa a fronteira
+                           de origem, então ali o playVideo() enviado por postMessage é
+                           recusado e a reprodução nunca começaria — a menos que não haja
+                           som, o único caso que o iOS libera. O som volta no primeiro
+                           PLAYING, em onPlayerState. Nos demais aparelhos o postMessage é
+                           aceito, e começar mudo seria piorar o trailer à toa. */
+                        mute: isIosPhone() ? 1 : 0,
                         controls: 0,
                         /* O vídeo fica sempre dentro do quadro, em todo aparelho. O
                            fullscreen nativo do iOS exigia devolver o toque ao iframe, e
@@ -857,6 +873,20 @@
                            seguro de descobrir o quadro. */
                         cover.hidden = true;
                         endcard.hidden = true;
+                        /* Com o vídeo já correndo, devolver o som não depende de gesto
+                           nenhum. Uma vez só: daí em diante quem manda no som é o usuário,
+                           e repetir isso a cada retomada desfaria a escolha dele.
+                           Sem ler isMuted() aqui — unMute() é postMessage e o estado ainda
+                           não voltou neste tick; a leitura sairia errada e estragaria o
+                           ícone. Se o unMute for recusado, o botão de som resolve, aí com
+                           um gesto do usuário por trás, que nenhuma política barra. */
+                        if (pendingUnmute) {
+                            pendingUnmute = false;
+                            try {
+                                player.unMute();
+                                player.setVolume(Number(volume.value));
+                            } catch (err) {}
+                        }
                         armIdle();
                     }
                     /* Pausar não mexe nas barras: elas ficam como o usuário as deixou.
@@ -915,6 +945,7 @@
                     cancelIdle();
                     fallback.hidden = true;
                     endcard.hidden = true;
+                    pendingUnmute = isIosPhone();
                     mask.hidden = false;
                     controls.dataset.disabled = "true";
                     toggleIcon.textContent = "play_arrow";
