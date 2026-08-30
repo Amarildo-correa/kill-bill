@@ -295,11 +295,9 @@
                 height: 40px;
                 display: grid;
                 place-items: center;
-                border: 1px solid var(--line);
                 flex: none;
             }
             .ctrl__btn:hover {
-                border-color: var(--sun);
                 color: var(--sun);
             }
             .ctrl__time {
@@ -315,12 +313,62 @@
                 background: transparent;
                 cursor: pointer;
             }
+            /* ---------- barra de posição ----------
+               A trilha do WebKit/Blink não tem parte "percorrida": o único jeito de
+               pintar o trecho já assistido é um gradiente de duas paradas no mesmo
+               ponto, e é esse ponto que o JS move em --fill. O Firefox tem
+               ::-moz-range-progress e dispensa a conta. */
             .ctrl__seek {
+                --fill: 0%;
                 flex: 1 1 140px;
                 min-width: 110px;
+                -webkit-appearance: none;
+                appearance: none;
+            }
+            .ctrl__seek::-webkit-slider-runnable-track {
+                height: 0.25rem;
+                border-radius: 999px;
+                background: linear-gradient(to right, var(--sun) 0 var(--fill), rgba(236, 230, 216, 0.3) var(--fill) 100%);
+            }
+            /* A margem negativa é metade da diferença entre polegar e trilha: sem ela
+               o círculo assenta sobre a trilha em vez de ficar centrado nela. */
+            .ctrl__seek::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 0.8rem;
+                height: 0.8rem;
+                margin-top: -0.275rem;
+                border-radius: 50%;
+                background: var(--sun);
+            }
+            .ctrl__seek::-moz-range-track {
+                height: 0.25rem;
+                border-radius: 999px;
+                background: rgba(236, 230, 216, 0.3);
+            }
+            .ctrl__seek::-moz-range-progress {
+                height: 0.25rem;
+                border-radius: 999px;
+                background: var(--sun);
+            }
+            .ctrl__seek::-moz-range-thumb {
+                width: 0.8rem;
+                height: 0.8rem;
+                border: 0;
+                border-radius: 50%;
+                background: var(--sun);
             }
             .ctrl__vol {
                 flex: 0 1 90px;
+            }
+            /* No aparelho de mão o quadro é estreito: tempo e volume saem para a barra
+               de posição não ficar espremida entre eles. O botão de mudo permanece —
+               é o que resta do controle de som. */
+            @media (max-width: 767.98px) {
+                .ctrl__time,
+                .ctrl__vol {
+                    display: none;
+                }
             }
             .ctrl[data-disabled="true"] {
                 opacity: 0.4;
@@ -828,6 +876,7 @@
                         player.seekTo(0, true);
                     } catch (err) {}
                     seek.value = "0";
+                    paintSeek();
                     toggleIcon.textContent = "play_arrow";
                     endcard.hidden = false;
                 }
@@ -871,6 +920,7 @@
                     controls.dataset.disabled = "true";
                     toggleIcon.textContent = "play_arrow";
                     seek.value = 0;
+                    paintSeek();
                     timeEl.textContent = "0:00 / 0:00";
 
                     watchdog = setTimeout(function () {
@@ -958,6 +1008,14 @@
                     return m + ":" + (s < 10 ? "0" : "") + s;
                 }
 
+                /* O trecho percorrido é desenhado por gradiente na trilha, e o gradiente
+                   só sabe onde parar se alguém lhe contar: toda escrita em seek.value
+                   passa por aqui. */
+                function paintSeek() {
+                    const pct = (Number(seek.value) / Number(seek.max)) * 100;
+                    seek.style.setProperty("--fill", pct + "%");
+                }
+
                 function startTicker() {
                     stopTicker();
                     ticker = setInterval(function () {
@@ -965,7 +1023,10 @@
                         var d = player.getDuration ? player.getDuration() : 0;
                         var c = player.getCurrentTime ? player.getCurrentTime() : 0;
                         timeEl.textContent = fmt(c) + " / " + fmt(d);
-                        if (d > 0) seek.value = String(Math.round((c / d) * 1000));
+                        if (d > 0) {
+                            seek.value = String(Math.round((c / d) * 1000));
+                            paintSeek();
+                        }
                         if (d > 0 && d - c <= 1.1 && player.getPlayerState() === YT.PlayerState.PLAYING) finishTrailer();
                     }, 250);
                 }
@@ -1032,6 +1093,10 @@
                 seek.addEventListener("pointerdown", function () {
                     seeking = true;
                 });
+                /* Durante o arraste o ticker está suspenso por `seeking`; sem isto o
+                   trecho pintado ficaria parado atrás do polegar. Vale também para as
+                   setas do teclado. */
+                seek.addEventListener("input", paintSeek);
                 seek.addEventListener("change", function (e) {
                     seeking = false;
                     if (!player || !ready) return;
