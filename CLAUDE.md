@@ -63,7 +63,17 @@ A única interação com o YouTube que o usuário pode alcançar é play/pause. 
 
 **Não existe painel cobrindo o quadro na pausa, e não deve ser adicionado.** Foi testado: o overlay de pausa do YouTube (cabeçalho, marca, grade de sugestões) depende de evento de mouse nascido **dentro** do iframe, e `pointer-events: none` garante que nenhum chegue lá — a pausa via `postMessage` não conta como interação. Medição em Chrome e WebKit, 25 s pausado: capturas byte a byte idênticas, quadro limpo. Ou seja, a barreira de ponteiro já cobre esse vetor de graça. Um painel opaco ali só produz tela preta ao pausar, escondendo o frame do filme sem esconder nada do YouTube. `rel: 0` apenas restringe a grade ao mesmo canal e `modestbranding` foi descontinuado em 2023 — não conte com nenhum dos dois.
 
-### No iPhone o som começa desligado, e só nele
+### No iPhone o player nasce antes do toque
+
+Ativação de usuário não atravessa a fronteira de origem, mas o efeito prático é mais estreito do que parece: o `playVideo()` por `postMessage` **é aceito** no iPhone quando sai de dentro de um gesto — o que ele recusa é a chamada disparada de `onPlayerReady()`, que roda como callback assíncrono, já fora do gesto. Era isso que obrigava a tocar duas vezes: o primeiro toque montava o player, e só o segundo, agora com um player pronto, conseguia tocá-lo.
+
+Por isso `prewarmForIos()` monta o player junto com a página, parado sob a capa e com `autoplay: 0`. Quando o usuário toca, `startFromCover()` encontra `ready` verdadeiro e chama `playVideo()` ali mesmo, dentro do gesto. **Custo: só no iPhone a facade é sacrificada** — script e iframe do YouTube são baixados antes do toque. Nos demais aparelhos nada do YouTube é pedido até alguém dar play.
+
+Silenciar não resolve esse caso e não é usado para isso: medido, `mute=1` chegava à URL do iframe e a reprodução seguia recusada. O mudo sobrou como rede de segurança em `armStartRetry()`, que 1,5 s depois de um play recusado tenta de novo sem som e devolve o som no primeiro `PLAYING`.
+
+**Não leia `isMuted()` logo após `unMute()`** — é `postMessage`, o estado não voltou ainda neste tick, e a leitura sai errada (já quebrou o ícone do som uma vez).
+
+Isso não devolve o **fullscreen nativo** do iOS, que continua exigindo gesto nascido dentro do iframe e não tem contorno: o iPhone segue na rota `.is-fs` + `is-rotated`.
 
 Ativação de usuário não atravessa a fronteira de origem: o toque acontece no documento desta página, não no do YouTube, e por isso o iOS recusa o `playVideo()` enviado por `postMessage`. A saída é nascer mudo — reprodução sem som é o único caso que o iOS libera sem gesto dentro do iframe. Daí `mute: isIosPhone() ? 1 : 0`: nos demais aparelhos o `postMessage` é aceito e começar mudo só pioraria o trailer.
 

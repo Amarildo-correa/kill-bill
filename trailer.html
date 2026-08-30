@@ -728,8 +728,9 @@
                 function isIosPhone() {
                     return /iP(hone|od)/.test(navigator.userAgent || "");
                 }
-                /* Só o iPhone começa mudo, e só ele precisa do som de volta depois. */
-                var pendingUnmute = isIosPhone();
+                /* Ligado só quando precisamos silenciar para conseguir iniciar. */
+                var pendingUnmute = false;
+                var startRetry = null;
 
                 var dialog = document.querySelector(".dialog");
                 var mask = document.getElementById("trailer-mask");
@@ -786,14 +787,11 @@
 
                 function playerVars() {
                     var vars = {
-                        autoplay: 1,
-                        /* Mudo só no iPhone. Ativação de usuário não atravessa a fronteira
-                           de origem, então ali o playVideo() enviado por postMessage é
-                           recusado e a reprodução nunca começaria — a menos que não haja
-                           som, o único caso que o iOS libera. O som volta no primeiro
-                           PLAYING, em onPlayerState. Nos demais aparelhos o postMessage é
-                           aceito, e começar mudo seria piorar o trailer à toa. */
-                        mute: isIosPhone() ? 1 : 0,
+                        /* No iPhone o player é criado junto com a página e fica parado
+                           sob a capa; quem dá o play é o toque do usuário, dentro do
+                           próprio gesto. Autoplay ali só renderia uma tentativa recusada,
+                           porque o iOS não aceita play fora de gesto. */
+                        autoplay: isIosPhone() ? 0 : 1,
                         controls: 0,
                         /* O vídeo fica sempre dentro do quadro, em todo aparelho. O
                            fullscreen nativo do iOS exigia devolver o toque ao iframe, e
@@ -843,6 +841,10 @@
                         frame.setAttribute("tabindex", "-1");
                         frame.setAttribute("aria-hidden", "true");
                     } catch (err) {}
+                    /* Pré-aquecimento do iPhone: o player ficou pronto por baixo da
+                       capa, antes de qualquer toque. Não há nada a revelar nem a tocar
+                       ainda — startFromCover() assume quando o usuário tocar. */
+                    if (isCover()) return;
                     dialog.classList.remove("is-starting");
                     /* A capa NÃO sai aqui. Pronto não é o mesmo que tocando: se o
                        navegador recusar o play — política de autoplay, o caso comum em
@@ -861,6 +863,7 @@
                     } catch (err) {
                         /* o usuário pode iniciar pelos controles próprios */
                     }
+                    armStartRetry();
                     startTicker();
                 }
 
@@ -880,6 +883,7 @@
                            não voltou neste tick; a leitura sairia errada e estragaria o
                            ícone. Se o unMute for recusado, o botão de som resolve, aí com
                            um gesto do usuário por trás, que nenhuma política barra. */
+                        clearTimeout(startRetry);
                         if (pendingUnmute) {
                             pendingUnmute = false;
                             try {
@@ -895,6 +899,22 @@
                        contingência têm tratamento próprio, em finishTrailer() e
                        showFallback(), e continuam chamando cancelIdle(). */
                     if (e.data === YT.PlayerState.ENDED) finishTrailer();
+                }
+
+                /* Se o play foi recusado, o som é o que a política barra: uma segunda
+                   tentativa sem som costuma passar, e o som volta no primeiro PLAYING.
+                   Vale para qualquer aparelho — é o que evita o quadro parado quando o
+                   autoplay é negado, sem obrigar ninguém a tocar de novo. */
+                function armStartRetry() {
+                    clearTimeout(startRetry);
+                    startRetry = setTimeout(function () {
+                        if (!player || !ready || isPlaying()) return;
+                        try {
+                            player.mute();
+                            pendingUnmute = true;
+                            player.playVideo();
+                        } catch (err) {}
+                    }, 1500);
                 }
 
                 /* Encerra antes da tela de sugestões do YouTube aparecer. */
@@ -917,6 +937,7 @@
                 function showFallback(code) {
                     cancelIdle();
                     clearTimeout(watchdog);
+                    clearTimeout(startRetry);
                     stopTicker();
                     ready = false;
                     dialog.classList.remove("is-starting");
@@ -945,7 +966,8 @@
                     cancelIdle();
                     fallback.hidden = true;
                     endcard.hidden = true;
-                    pendingUnmute = isIosPhone();
+                    pendingUnmute = false;
+                    clearTimeout(startRetry);
                     mask.hidden = false;
                     controls.dataset.disabled = "true";
                     toggleIcon.textContent = "play_arrow";
@@ -1022,10 +1044,40 @@
                 function startFromCover() {
                     if (!isCover()) return;
                     dialog.classList.remove("is-cover");
+                    paintToggleSkin(false);
+                    /* Player já pronto significa que o pré-aquecimento do iPhone pegou:
+                       o playVideo() sai daqui, ainda dentro do gesto do usuário, que é
+                       a única forma de o iOS aceitá-lo. Chamado de onPlayerReady, fora
+                       do gesto, ele é recusado — era o que obrigava a tocar duas vezes. */
+                    if (ready && player) {
+                        mask.hidden = true;
+                        controls.dataset.disabled = "false";
+                        try {
+                            player.setVolume(Number(volume.value));
+                            player.playVideo();
+                        } catch (err) {}
+                        armStartRetry();
+                        startTicker();
+                        return;
+                    }
                     /* is-starting mantém a capa sob o véu do spinner até o player responder. */
                     dialog.classList.add("is-starting");
-                    paintToggleSkin(false);
                     mountTrailer();
+                }
+
+                /* No iPhone o player é montado junto com a página, ainda escondido sob a
+                   capa, só para que o primeiro toque encontre um player pronto e possa
+                   tocá-lo dentro do gesto. Custo: neste aparelho o script e o iframe do
+                   YouTube são baixados antes do toque — nos demais a facade segue
+                   intacta, nada do YouTube é pedido até alguém dar play. Se falhar, nada
+                   se perde: o toque cai no caminho comum, montando na hora. */
+                function prewarmForIos() {
+                    if (!isIosPhone()) return;
+                    loadApi()
+                        .then(function () {
+                            createTrailerPlayer();
+                        })
+                        .catch(function () {});
                 }
 
                 /* ---------------------------------------------------------------
@@ -1348,6 +1400,7 @@
                 /* A página abre na capa — o estado inicial já vem marcado no HTML, então
                    não há troca visível aqui; resta só corrigir a miniatura se preciso. */
                 paintCover();
+                prewarmForIos();
             })();
         </script>
     </body>
