@@ -562,6 +562,38 @@
                 cursor: pointer;
             }
 
+            /* ---------- iPhone: o toque precisa alcançar o embed ----------
+               O fullscreen nativo do iOS só é concedido a um gesto nascido
+               dentro do iframe — playVideo() por postMessage não carrega a
+               ativação do usuário através da fronteira de origem. Por isso, e
+               só neste aparelho, o escudo sai da frente e a camada do player
+               volta a receber toque. Os controles próprios continuam por cima
+               (z-index 6), então nada se perde além do toque no meio do quadro. */
+            .ios-phone .video__stage {
+                pointer-events: auto;
+            }
+            .ios-phone .video__shield,
+            .ios-phone #trailer-fullscreen {
+                display: none;
+            }
+            .video__hint {
+                position: absolute;
+                left: 50%;
+                bottom: 22%;
+                transform: translateX(-50%);
+                z-index: 5;
+                margin: 0;
+                padding: 0.55rem 0.9rem;
+                pointer-events: none;
+                background: rgba(12, 11, 9, 0.88);
+                color: var(--bone);
+                font-family: var(--mono);
+                font-size: 0.68rem;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                text-align: center;
+            }
+
             .endcard {
                 position: absolute;
                 inset: 0;
@@ -1341,6 +1373,7 @@
                 <div class="video">
                     <div class="video__stage"><div id="trailer-player"></div></div>
                     <div class="video__shield" id="trailer-shield" aria-hidden="true"></div>
+                    <p class="video__hint" id="trailer-hint" hidden>Toque no vídeo para assistir em tela cheia</p>
                     <div class="endcard" id="trailer-endcard" hidden>
                         <p class="endcard__t">Fim do trailer</p>
                         <button type="button" class="endcard__btn" id="trailer-replay">
@@ -1460,6 +1493,10 @@
                 var titleEl = document.getElementById("videoTitle");
                 var channelEl = document.getElementById("channel");
                 var dialog = modal.querySelector(".dialog");
+                var hint = document.getElementById("trailer-hint");
+
+                /* Marca o documento uma vez: o CSS decide o resto. */
+                if (isIosPhone()) document.documentElement.classList.add("ios-phone");
                 var fsBtn = document.getElementById("trailer-fullscreen");
                 var fsIcon = document.getElementById("fullscreen-icon");
 
@@ -1593,7 +1630,10 @@
                            vídeo segue no quadro, sob os controles próprios. */
                         playsinline: isIosPhone() ? 0 : 1,
                         rel: 0,
-                        fs: 0,
+                        /* fs:1 no iPhone só para o iframe nascer com permissão de
+                           tela cheia; com controls:0 nenhum botão do YouTube é
+                           desenhado, então a interface segue igual. */
+                        fs: isIosPhone() ? 1 : 0,
                         enablejsapi: 1,
                         modestbranding: 1,
                         iv_load_policy: 3,
@@ -1641,6 +1681,7 @@
                     toggleBtn.setAttribute("aria-label", playing ? "Pausar" : "Reproduzir");
                     if (playing) {
                         endcard.hidden = true;
+                        hint.hidden = true;
                         armIdle();
                     } else cancelIdle();
                     if (e.data === YT.PlayerState.ENDED) finishTrailer();
@@ -1703,6 +1744,7 @@
                     document.body.classList.add("is-locked");
                     fallback.hidden = true;
                     endcard.hidden = true;
+                    hint.hidden = !isIosPhone();
                     mask.hidden = false;
                     controls.dataset.disabled = "true";
                     toggleIcon.textContent = "play_arrow";
@@ -1851,14 +1893,6 @@
                     return fsElement() === dialog || dialog.classList.contains("is-fs");
                 }
                 function paintFsIcon() {
-                    /* Sem estado a espelhar: quem entra e sai da tela cheia é o player
-                       nativo do iOS, fora do alcance da página. */
-                    if (isIosPhone()) {
-                        fsIcon.textContent = "smart_display";
-                        fsBtn.setAttribute("aria-label", "Reproduzir em tela cheia");
-                        fsBtn.removeAttribute("aria-pressed");
-                        return;
-                    }
                     var on = isFullscreen();
                     fsIcon.textContent = on ? "fullscreen_exit" : "fullscreen";
                     fsBtn.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1938,16 +1972,6 @@
                     return /iP(hone|od)/.test(navigator.userAgent || "");
                 }
 
-                /* Neste aparelho o botão não alterna tela cheia: ele dá play, e é o
-                   próprio iOS que abre o player nativo já em paisagem. Precisa correr
-                   dentro do gesto do usuário, senão o sistema recusa. */
-                function playFullscreenIOS() {
-                    if (!player || !ready) return;
-                    try {
-                        player.playVideo();
-                    } catch (err) {}
-                }
-
                 function applyRotation() {
                     var girar = rotateByCss && portraitMQ.matches && isFullscreen();
                     dialog.classList.toggle("is-rotated", girar);
@@ -1989,10 +2013,6 @@
                 else if (portraitMQ.addListener) portraitMQ.addListener(applyRotation);
 
                 function toggleFullscreen() {
-                    if (isIosPhone()) {
-                        playFullscreenIOS();
-                        return;
-                    }
                     if (isFullscreen()) exitFullscreen();
                     else enterFullscreen();
                 }
