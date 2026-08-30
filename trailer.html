@@ -1245,15 +1245,13 @@
                 var BAR_EXTRA_MS = 1000;
                 var IDLE_MS = YT_OVERLAY_MS + BAR_EXTRA_MS;
 
-                var titleBar = dialog.querySelector(".dialog__bar");
                 var idleTimer = null;
-                var barsPinned = false; /* ponteiro pousado sobre uma das barras */
 
                 function isPlaying() {
                     return !!(player && ready && player.getPlayerState && player.getPlayerState() === YT.PlayerState.PLAYING);
                 }
                 function hideBars() {
-                    if (barsPinned || !isPlaying()) return;
+                    if (!isPlaying()) return;
                     if (!endcard.hidden || !fallback.hidden) return;
                     dialog.classList.add("is-idle");
                 }
@@ -1267,31 +1265,15 @@
                 function cancelIdle() {
                     clearTimeout(idleTimer);
                     idleTimer = null;
-                    barsPinned = false;
                     dialog.classList.remove("is-idle");
                 }
 
-                dialog.addEventListener("pointermove", function () {
-                    if (isPlaying()) armIdle();
-                });
-                dialog.addEventListener("pointerdown", function () {
-                    if (isPlaying()) armIdle();
-                });
-
-                /* pointerover/out em vez de enter/leave: as barras têm pointer-events:none e
-                   só recebem estes eventos por borbulhamento dos filhos. */
-                [titleBar, controls].forEach(function (bar) {
-                    bar.addEventListener("pointerover", function () {
-                        barsPinned = true;
-                        clearTimeout(idleTimer);
-                        dialog.classList.remove("is-idle");
-                    });
-                    bar.addEventListener("pointerout", function (e) {
-                        if (e.relatedTarget && bar.contains(e.relatedTarget)) return;
-                        barsPinned = false;
-                        if (isPlaying()) armIdle();
-                    });
-                });
+                /* Nenhum gesto de ponteiro reexibe as barras — nem mover o mouse sobre o
+                   quadro, nem pousá-lo sobre uma das barras, nem clicar. Recolhidas, elas
+                   só voltam quando a reprodução recomeça, quando o trailer acaba ou quando
+                   a contingência aparece. O teclado é a exceção deliberada: o armIdle() do
+                   keydown e o :has(:focus-visible) no CSS mantêm os controles alcançáveis
+                   para quem não usa mouse. */
 
                 /* ---------------------------------------------------------------
                    9. Gatilhos

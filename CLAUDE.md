@@ -30,7 +30,7 @@ O JS quase nunca mexe em `style`; ele liga e desliga classes e o CSS decide o re
 
 - `is-cover` — estado inicial (já vem no HTML). Mostra só a miniatura e o botão grande; o resto da barra de controles fica oculto.
 - `is-starting` — entre o toque e o `onReady`: a capa continua sob um véu translúcido para o quadro não piscar preto.
-- `is-idle` — barras recolhidas por inatividade. Pausar não liga nem desliga esta classe: as barras ficam como estavam.
+- `is-idle` — barras recolhidas por inatividade. Pausar não liga nem desliga esta classe, e **nenhum gesto de ponteiro a desliga**: mover o mouse, pousá-lo sobre uma barra ou clicar não reexibem nada. Só saem dela a retomada da reprodução, o fim do trailer, a contingência e o teclado.
 - `is-fs` — contingência de tela cheia por CSS quando a Fullscreen API não é concedida.
 - `is-rotated` — giro de 90° por CSS quando `screen.orientation.lock` falha.
 
