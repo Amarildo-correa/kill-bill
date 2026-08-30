@@ -504,7 +504,10 @@
             .dialog.is-idle .ctrl > * {
                 pointer-events: none;
             }
-            .dialog.is-idle .video__shield {
+            /* O cursor some junto com as barras, mas só enquanto o vídeo corre. Pausado
+               is-idle continua valendo, e aí quem passa o mouse sobre o quadro precisa
+               vê-lo para saber onde vai clicar para retomar. */
+            .dialog.is-idle.is-playing .video__shield {
                 cursor: none;
             }
             /* Quem chega por teclado traz a barra de volta mesmo em repouso. */
@@ -847,6 +850,9 @@
                     var playing = e.data === YT.PlayerState.PLAYING;
                     toggleIcon.textContent = playing ? "pause" : "play_arrow";
                     toggleBtn.setAttribute("aria-label", playing ? "Pausar" : "Reproduzir");
+                    /* Quem consome isto é só o CSS, para esconder o cursor sobre o quadro
+                       durante a reprodução sem escondê-lo na pausa. */
+                    dialog.classList.toggle("is-playing", playing);
                     if (playing) {
                         /* Só aqui existe imagem em movimento por baixo: é o momento
                            seguro de descobrir o quadro. */
@@ -885,6 +891,7 @@
                     stopTicker();
                     ready = false;
                     dialog.classList.remove("is-starting");
+                    dialog.classList.remove("is-playing");
                     cover.hidden = true;
                     mask.hidden = true;
                     controls.dataset.disabled = "true";
@@ -910,6 +917,7 @@
                     cancelIdle();
                     fallback.hidden = true;
                     endcard.hidden = true;
+                    dialog.classList.remove("is-playing");
                     mask.hidden = false;
                     controls.dataset.disabled = "true";
                     toggleIcon.textContent = "play_arrow";
