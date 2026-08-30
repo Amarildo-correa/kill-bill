@@ -1,0 +1,5 @@
+[     922ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8000/favicon.ico:0
+[    1865ms] [WARNING] Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://www.youtube-nocookie.com') does not match the recipient window's origin ('http://localhost:8000'). @ https://www.youtube.com/s/player/e937390a/www-widgetapi.vflset/www-widgetapi.js:162
+[    2114ms] [WARNING] Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://www.youtube-nocookie.com') does not match the recipient window's origin ('http://localhost:8000'). @ https://www.youtube.com/s/player/e937390a/www-widgetapi.vflset/www-widgetapi.js:162
+[    3440ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8000/favicon.ico:0
+[    3776ms] [WARNING] The powerPreference option is currently ignored when calling requestAdapter() on Windows. See https://crbug.com/369219127 @ :0

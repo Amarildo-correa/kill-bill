@@ -1,0 +1,16 @@
+- generic [ref=e2]:
+  - paragraph [ref=e11]: "Trailer — Kill Bill: Vol. 1"
+  - generic [ref=e3]:
+    - iframe [ref=e12]:
+      - generic "Player de vídeo do YouTube" [ref=f1e3]
+    - status "Carregando o player" [ref=e14]
+  - generic:
+    - button "Reproduzir ou pausar":
+      - generic: play_arrow
+    - generic: 0:00 / 0:00
+    - slider "Posição do vídeo": "0"
+    - button "Ativar ou desativar o som":
+      - generic: volume_up
+    - slider "Volume": "100"
+    - button "Tela cheia":
+      - generic: fullscreen

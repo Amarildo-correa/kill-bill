@@ -1,0 +1,5 @@
+- button "Assistir ao trailer" [ref=e6] [cursor=pointer]:
+  - generic [ref=e7]: play_arrow
+  - generic [ref=e8]:
+    - generic [ref=e9]: Assistir
+    - generic [ref=e10]: "Kill Bill: Volume 1 | Official Trailer"

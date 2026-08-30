@@ -22,7 +22,7 @@ Não há build, lint nem suíte de testes. Verificação é manual no navegador;
 
 O iframe do YouTube fica em `.video__stage`, que tem `pointer-events: none`; por cima dele há `#trailer-shield`, um retângulo transparente que captura todo clique sobre o quadro. A interface do YouTube nunca é acionada. Os controles próprios (`.dialog__bar` no topo, `.ctrl` embaixo) flutuam em `z-index: 6` sobre o vídeo com gradientes que escondem o cabeçalho e o rodapé de sugestões que o YouTube desenha quando pausado. O `<iframe>` recebe `scale(1.06)` para o mesmo fim.
 
-Consequência prática: **qualquer camada nova sobre o vídeo precisa declarar seu z-index dentro dessa pilha** — capa `1`, máscara/escudo `2`, painel de pausa `4`, endcard e fallback `5`, barras `6`.
+Consequência prática: **qualquer camada nova sobre o vídeo precisa declarar seu z-index dentro dessa pilha** — capa `1`, máscara/escudo `2`, endcard e fallback `5`, barras `6`.
 
 ### Máquina de estados por classe no `.dialog`
 
@@ -30,7 +30,6 @@ O JS quase nunca mexe em `style`; ele liga e desliga classes e o CSS decide o re
 
 - `is-cover` — estado inicial (já vem no HTML). Mostra só a miniatura e o botão grande; o resto da barra de controles fica oculto.
 - `is-starting` — entre o toque e o `onReady`: a capa continua sob um véu translúcido para o quadro não piscar preto.
-- `is-paused` — painel opaco cobrindo o quadro enquanto o vídeo está pausado; ver "Vedação" abaixo.
 - `is-idle` — barras recolhidas por inatividade.
 - `is-fs` — contingência de tela cheia por CSS quando a Fullscreen API não é concedida.
 - `is-rotated` — giro de 90° por CSS quando `screen.orientation.lock` falha.
@@ -57,7 +56,9 @@ A única interação com o YouTube que o usuário pode alcançar é play/pause. 
 
 - **Ponteiro** — `pointer-events: none` no `.video__stage` tira o iframe do hit-testing; `#trailer-shield` por cima é a segunda barreira e é quem trata o play/pause. Efeito colateral desejável: o clique direito abre o menu do documento pai, nunca o "Copiar URL do vídeo" do YouTube.
 - **Foco** — `onPlayerReady()` marca o iframe com `tabindex="-1"` e `aria-hidden="true"`. `pointer-events` não barra foco: sem isso o `Tab` entra no documento do YouTube e, a partir dali, os atalhos `f`/`Escape` daqui deixam de receber tecla.
-- **Pixel** — as barras cobrem topo e base; `.video__paused` cobre o quadro **inteiro** enquanto pausado, porque é no meio do quadro que o YouTube desenha a grade de sugestões, fora do alcance dos gradientes. `rel: 0` apenas restringe essa grade ao mesmo canal e `modestbranding` foi descontinuado em 2023 — nenhum dos dois esconde coisa alguma.
+- **Pixel** — as barras cobrem topo e base com gradientes, o `scale(1.06)` no iframe corta as bordas, `IDLE_MS` só recolhe as barras depois que o cabeçalho do YouTube já saiu, e `finishTrailer()` encerra antes da tela de sugestões do fim.
+
+**Não existe painel cobrindo o quadro na pausa, e não deve ser adicionado.** Foi testado: o overlay de pausa do YouTube (cabeçalho, marca, grade de sugestões) depende de evento de mouse nascido **dentro** do iframe, e `pointer-events: none` garante que nenhum chegue lá — a pausa via `postMessage` não conta como interação. Medição em Chrome e WebKit, 25 s pausado: capturas byte a byte idênticas, quadro limpo. Ou seja, a barreira de ponteiro já cobre esse vetor de graça. Um painel opaco ali só produz tela preta ao pausar, escondendo o frame do filme sem esconder nada do YouTube. `rel: 0` apenas restringe a grade ao mesmo canal e `modestbranding` foi descontinuado em 2023 — não conte com nenhum dos dois.
 
 ### O iPhone já teve um caminho próprio; não reintroduzir
 
@@ -77,8 +78,6 @@ Para tela cheia em geral há três rotas encadeadas: `requestFullscreen` no `.di
 ## Detalhes fáceis de quebrar
 
 - **`paintSeek()`**: a barra de posição pinta o trecho percorrido com um gradiente de duas paradas no mesmo ponto (`--fill`), porque WebKit/Blink não têm pseudo-elemento de progresso. **Toda escrita em `seek.value` precisa chamar `paintSeek()`**, senão o preenchimento congela.
-- **`.video__paused` precisa de `pointer-events: none`** — ele está em z-index `4`, acima do escudo (`2`); sem isso o clique no quadro para retomar morre no painel.
-- **`is-paused` liga só em `PAUSED`, nunca em `BUFFERING`** — o YouTube não mostra sugestões enquanto carrega, e cobrir o quadro a cada seek viraria piscada.
 - **`finishTrailer()`** pausa e volta ao início ~1,1 s antes do fim para a tela de sugestões do YouTube nunca aparecer. Não substituir por confiar apenas no evento `ENDED`.
 - **`IDLE_MS = 4000`** (3000 do overlay do YouTube + 1000 de folga): as barras próprias só recuam depois que o cabeçalho do YouTube já saiu. Encurtar esse valor expõe a interface do YouTube.
 - **`is-rotated` usa `svh`/`svw`, nunca `dvh`/`dvw`** — a unidade dinâmica oscila enquanto a barra do navegador encolhe e vira tremor de layout no overlay girado.
@@ -86,4 +85,6 @@ Para tela cheia em geral há três rotas encadeadas: `requestFullscreen` no `.di
 
 ## Matriz de verificação manual
 
-Ao mexer no player, conferir: desktop (mouse, teclado `f`/`Escape`, e `Tab` percorrendo os controles sem o foco entrar no iframe), pausa no meio do vídeo (nenhuma sugestão do YouTube à vista, e o clique no quadro retoma), aparelho de mão Android (lock de orientação real), iPhone (tela cheia por `.is-fs` + `is-rotated`, já que não há fullscreen nativo), e a página aberta por `file://` (deve mostrar a contingência do erro 153, com "Tentar novamente" funcionando).
+Ao mexer no player, conferir: desktop (mouse, teclado `f`/`Escape`, e `Tab` percorrendo os controles sem o foco entrar no iframe), pausa no meio do vídeo (frame congelado à vista, sem nada do YouTube e sem tela preta, e o clique no quadro retoma), aparelho de mão Android (lock de orientação real), iPhone (tela cheia por `.is-fs` + `is-rotated`, já que não há fullscreen nativo), e a página aberta por `file://` (deve mostrar a contingência do erro 153, com "Tentar novamente" funcionando).
+
+Boa parte disso é automatizável com o `playwright-cli`, **desde que em `--headed`**: em headless o iframe do YouTube não é decodificado e o quadro sai preto em toda captura, o que faz qualquer verificação visual passar por engano.

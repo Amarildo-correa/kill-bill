@@ -124,7 +124,13 @@
                 background: #000;
                 overflow: hidden;
             }
-            /* a camada do iframe não recebe toque: a interface do YouTube nunca é acionada */
+            /* A camada do iframe não recebe toque, e isto resolve duas coisas de uma vez:
+               nenhum clique aciona a interface do YouTube, e o overlay de pausa dele
+               (cabeçalho, marca e grade de sugestões) nunca chega a ser desenhado, porque
+               depende de evento de mouse nascido dentro do iframe — a pausa via postMessage
+               não conta como interação. Medido em Chrome e WebKit: 25s pausado, capturas
+               byte a byte idênticas. Por isso não há painel cobrindo o quadro na pausa;
+               devolver ponteiro a esta camada traz a interface do YouTube junto. */
             .video__stage {
                 position: absolute;
                 inset: 0;
@@ -146,28 +152,6 @@
                 z-index: 2;
                 background: transparent;
                 cursor: pointer;
-            }
-
-            /* ---------- painel de pausa ----------
-               Pausado, o YouTube volta a desenhar o cabeçalho e a grade de
-               sugestões, e a grade ocupa o meio do quadro — justo a faixa que os
-               gradientes das barras não alcançam. rel:0 não remove essa grade,
-               apenas a restringe ao mesmo canal, então o único jeito de não
-               mostrá-la é cobrir o quadro inteiro. Fica abaixo das barras
-               (z-index 6) e não recebe ponteiro: o clique no meio do quadro
-               precisa seguir até o escudo para retomar a reprodução. */
-            .video__paused {
-                position: absolute;
-                inset: 0;
-                z-index: 4;
-                display: none;
-                background: #0a0906;
-                pointer-events: none;
-            }
-            /* Sem transição de propósito: um fade deixaria a grade do YouTube à vista
-               durante a entrada, que é exatamente o que este painel existe para esconder. */
-            .dialog.is-paused .video__paused {
-                display: block;
             }
 
             .endcard {
@@ -657,7 +641,6 @@
                     <img class="video__cover-img" id="trailer-cover-img" src="https://i.ytimg.com/vi/Wv3kZxK9dwA/maxresdefault.jpg" alt="" decoding="async" fetchpriority="high" />
                 </div>
                 <div class="video__shield" id="trailer-shield" aria-hidden="true"></div>
-                <div class="video__paused" id="trailer-paused" aria-hidden="true"></div>
                 <div class="endcard" id="trailer-endcard" hidden>
                     <p class="endcard__t">Fim do trailer</p>
                     <button type="button" class="endcard__btn" id="trailer-replay">
@@ -852,10 +835,6 @@
                     var playing = e.data === YT.PlayerState.PLAYING;
                     toggleIcon.textContent = playing ? "pause" : "play_arrow";
                     toggleBtn.setAttribute("aria-label", playing ? "Pausar" : "Reproduzir");
-                    /* Só em PAUSED: BUFFERING também não é "playing", mas ali o YouTube
-                       desenha apenas o próprio spinner, e cobrir o quadro a cada seek
-                       viraria piscada. */
-                    dialog.classList.toggle("is-paused", e.data === YT.PlayerState.PAUSED);
                     if (playing) {
                         endcard.hidden = true;
                         armIdle();
@@ -886,7 +865,6 @@
                     stopTicker();
                     ready = false;
                     dialog.classList.remove("is-starting");
-                    dialog.classList.remove("is-paused");
                     cover.hidden = true;
                     mask.hidden = true;
                     controls.dataset.disabled = "true";
@@ -912,7 +890,6 @@
                     cancelIdle();
                     fallback.hidden = true;
                     endcard.hidden = true;
-                    dialog.classList.remove("is-paused");
                     mask.hidden = false;
                     controls.dataset.disabled = "true";
                     toggleIcon.textContent = "play_arrow";
