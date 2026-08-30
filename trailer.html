@@ -10,6 +10,7 @@
 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link rel="preconnect" href="https://i.ytimg.com" />
         <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,400..900&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=block" rel="stylesheet" />
 
@@ -492,9 +493,111 @@
             .dialog .ctrl[data-disabled="true"] > * {
                 pointer-events: none;
             }
+            /* ---------- capa (facade) ----------
+   A miniatura vem por URL direta do CDN de imagens do YouTube: é o mesmo
+   arquivo que a Data API v3 devolveria em snippet.thumbnails, sem chave, sem
+   cota e sem um round-trip antes do primeiro pixel. O script do player só é
+   baixado no primeiro toque — quem nunca dá play não paga por ele. */
+            .video__cover {
+                position: absolute;
+                inset: 0;
+                z-index: 1;
+                background: #000;
+            }
+            .video__cover-img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            /* Escurece a base: o texto do botão precisa ler sobre qualquer quadro. */
+            .video__cover::after {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(0deg, rgba(6, 5, 4, 0.94) 0%, rgba(6, 5, 4, 0.6) 32%, rgba(6, 5, 4, 0) 62%);
+            }
+
+            /* Enquanto o player monta, a capa segue por baixo do spinner e a máscara
+               vira véu: o quadro nunca pisca preto entre o toque e o primeiro frame. */
+            .dialog.is-starting .video__mask {
+                background: rgba(6, 5, 4, 0.72);
+            }
+
+            /* ---------- o mesmo botão, outra pele ----------
+   #trailer-toggle não muda de lugar nem de função: continua dentro da barra de
+   controles e continua sendo o play/pause. Na capa ele apenas troca .ctrl__btn
+   por .cover__play e revela o texto que já carrega dentro de si. */
+            .dialog.is-cover .dialog__bar {
+                display: none;
+            }
+            .dialog.is-cover .ctrl > *:not(#trailer-toggle) {
+                display: none;
+            }
+            .dialog.is-cover .ctrl {
+                background: none;
+                padding: clamp(1rem, 3.2vw, 2rem);
+            }
+
+            .cover__play {
+                --play-size: clamp(3.25rem, 11vw, 6.75rem);
+                display: flex;
+                align-items: center;
+                gap: clamp(0.75rem, 2.4vw, 1.5rem);
+                flex: 1 1 auto;
+                min-width: 0;
+                padding: 0;
+                text-align: left;
+            }
+            .cover__play .material-symbols-outlined {
+                flex: none;
+                display: grid;
+                place-items: center;
+                width: var(--play-size);
+                height: var(--play-size);
+                border-radius: 50%;
+                background: var(--sun);
+                color: #100e07;
+                font-size: calc(var(--play-size) * 0.58);
+                transition: transform 0.2s ease;
+            }
+            .cover__play:hover .material-symbols-outlined,
+            .cover__play:focus-visible .material-symbols-outlined {
+                transform: scale(1.07);
+            }
+            /* min-width:0 nos dois níveis: sem isso o item flex adota a largura do
+               conteúdo e o text-overflow nunca chega a cortar nada. */
+            .cover__text {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0.1rem;
+            }
+            .cover__kicker {
+                font-family: var(--display);
+                font-weight: 800;
+                font-size: clamp(1rem, 3vw, 1.85rem);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--sun);
+                line-height: 1.2;
+            }
+            .cover__name {
+                font-family: var(--display);
+                font-weight: 700;
+                font-size: clamp(1rem, 3.2vw, 2rem);
+                color: var(--bone);
+                line-height: 1.25;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
             @media (prefers-reduced-motion: reduce) {
                 .dialog__bar,
                 .ctrl {
+                    transition: none;
+                }
+                .cover__play .material-symbols-outlined {
                     transition: none;
                 }
             }
@@ -502,13 +605,19 @@
     </head>
 
     <body>
-        <div class="dialog">
+        <div class="dialog is-cover">
             <div class="dialog__bar">
                 <p class="dialog__title" id="dialog-title"><b>Trailer</b> — <span id="dialog-name">Kill Bill: Vol. 1</span></p>
             </div>
 
             <div class="video">
                 <div class="video__stage"><div id="trailer-player"></div></div>
+                <!-- src literal de propósito: o download começa no parse do HTML, antes
+                     do script no fim do body. O JS deriva a mesma URL de VIDEO_ID e cuida
+                     da queda para hqdefault quando maxres não existe. -->
+                <div class="video__cover" id="trailer-cover">
+                    <img class="video__cover-img" id="trailer-cover-img" src="https://i.ytimg.com/vi/Wv3kZxK9dwA/maxresdefault.jpg" alt="" decoding="async" fetchpriority="high" />
+                </div>
                 <div class="video__shield" id="trailer-shield" aria-hidden="true"></div>
                 <p class="video__hint" id="trailer-hint" hidden>Toque no vídeo para assistir em tela cheia</p>
                 <div class="endcard" id="trailer-endcard" hidden>
@@ -518,7 +627,7 @@
                         Assistir de novo
                     </button>
                 </div>
-                <div class="video__mask" id="trailer-mask"><div class="spinner" role="status" aria-label="Carregando o player"></div></div>
+                <div class="video__mask" id="trailer-mask" hidden><div class="spinner" role="status" aria-label="Carregando o player"></div></div>
                 <div class="fallback" id="trailer-fallback" hidden>
                     <h3 id="fallback-title">O YouTube recusou a reprodução aqui</h3>
                     <p id="fallback-desc">
@@ -532,9 +641,13 @@
                 </div>
             </div>
 
-            <div class="ctrl" id="trailer-controls" data-disabled="true">
-                <button type="button" class="ctrl__btn" id="trailer-toggle" aria-label="Reproduzir ou pausar">
+            <div class="ctrl" id="trailer-controls" data-disabled="false">
+                <button type="button" class="cover__play" id="trailer-toggle" aria-label="Assistir ao trailer">
                     <span class="material-symbols-outlined" id="toggle-icon" aria-hidden="true">play_arrow</span>
+                    <span class="cover__text" id="cover-text">
+                        <span class="cover__kicker">Assistir</span>
+                        <span class="cover__name" id="cover-name">Kill Bill: Volume 1 | Official Trailer</span>
+                    </span>
                 </button>
                 <span class="ctrl__time" id="trailer-time">0:00 / 0:00</span>
                 <input class="ctrl__seek" id="trailer-seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Posição do vídeo" />
@@ -559,6 +672,14 @@
                       incorporado do YouTube.
                 ----------------------------------------------------------------*/
                 var VIDEO_ID = "Wv3kZxK9dwA";
+
+                /* Miniatura oficial servida pelo CDN de imagens do YouTube — o mesmo
+                   arquivo que a Data API v3 devolveria em snippet.thumbnails, só que
+                   sem chave exposta no cliente e sem cota diária para estourar.
+                   maxres só existe quando o upload tinha 720p ou mais; quando não
+                   existe, o CDN responde 200 com um cinza de 120x90 em vez de 404 —
+                   por isso a checagem em paintCover() mede a imagem e não escuta erro. */
+                var COVER_HQ = "https://i.ytimg.com/vi/" + VIDEO_ID + "/hqdefault.jpg";
 
                 /* ---------------------------------------------------------------
                    2. Estado
@@ -588,6 +709,9 @@
                 var volume = document.getElementById("trailer-volume");
                 var timeEl = document.getElementById("trailer-time");
                 var hint = document.getElementById("trailer-hint");
+                var cover = document.getElementById("trailer-cover");
+                var coverImg = document.getElementById("trailer-cover-img");
+                var coverText = document.getElementById("cover-text");
                 var fsBtn = document.getElementById("trailer-fullscreen");
                 var fsIcon = document.getElementById("fullscreen-icon");
 
@@ -669,6 +793,9 @@
                 function onPlayerReady() {
                     ready = true;
                     clearTimeout(watchdog);
+                    /* A capa sai só agora: até aqui ela é o fundo do spinner. */
+                    dialog.classList.remove("is-starting");
+                    cover.hidden = true;
                     mask.hidden = true;
                     controls.dataset.disabled = "false";
                     try {
@@ -713,6 +840,8 @@
                     clearTimeout(watchdog);
                     stopTicker();
                     ready = false;
+                    dialog.classList.remove("is-starting");
+                    cover.hidden = true;
                     mask.hidden = true;
                     controls.dataset.disabled = "true";
                     destroyTrailerPlayer();
@@ -772,6 +901,54 @@
                 }
 
                 /* ---------------------------------------------------------------
+                   5b. Capa (facade)
+                      Nada do YouTube é baixado antes do primeiro toque: a página
+                      mostra a miniatura e só monta o player quando o usuário pede.
+                ----------------------------------------------------------------*/
+                function isCover() {
+                    return dialog.classList.contains("is-cover");
+                }
+
+                /* O botão é o mesmo elemento nos dois estados — troca de pele, nunca
+                   de função. Quem decide entre montar e alternar é o handler de clique. */
+                function paintToggleSkin(onCover) {
+                    toggleBtn.classList.toggle("cover__play", onCover);
+                    toggleBtn.classList.toggle("ctrl__btn", !onCover);
+                    coverText.hidden = !onCover;
+                    toggleBtn.setAttribute("aria-label", onCover ? "Assistir ao trailer" : "Reproduzir ou pausar");
+                }
+
+                /* Um maxres inexistente chega como 200 com um cinza de 120x90, então o
+                   teste é a medida da imagem; onerror sozinho não pegaria esse caso.
+                   hqdefault tem 480x360 e existe para todo vídeo — não há recursão. */
+                function paintCover() {
+                    function degrade() {
+                        if (coverImg.src !== COVER_HQ) coverImg.src = COVER_HQ;
+                    }
+                    function measure() {
+                        if (coverImg.naturalWidth === 120 && coverImg.naturalHeight === 90) degrade();
+                    }
+                    /* A imagem pode ter resolvido antes deste script rodar: o evento já
+                       teria passado, então o estado é lido de complete/naturalWidth. */
+                    if (coverImg.complete) {
+                        if (coverImg.naturalWidth) measure();
+                        else degrade();
+                        return;
+                    }
+                    coverImg.addEventListener("load", measure, { once: true });
+                    coverImg.addEventListener("error", degrade, { once: true });
+                }
+
+                function startFromCover() {
+                    if (!isCover()) return;
+                    dialog.classList.remove("is-cover");
+                    /* is-starting mantém a capa sob o véu do spinner até o player responder. */
+                    dialog.classList.add("is-starting");
+                    paintToggleSkin(false);
+                    mountTrailer();
+                }
+
+                /* ---------------------------------------------------------------
                    6. Controles próprios (controls=0)
                 ----------------------------------------------------------------*/
                 function fmt(sec) {
@@ -805,10 +982,17 @@
                     else player.playVideo();
                 }
 
-                toggleBtn.addEventListener("click", togglePlayback);
+                toggleBtn.addEventListener("click", function () {
+                    if (isCover()) startFromCover();
+                    else togglePlayback();
+                });
 
                 /* Toque sobre o vídeo é tratado aqui e nunca chega ao iframe. */
                 shield.addEventListener("click", function () {
+                    if (isCover()) {
+                        startFromCover();
+                        return;
+                    }
                     if (!endcard.hidden) return;
                     togglePlayback();
                 });
@@ -1092,7 +1276,9 @@
                     }
                 });
 
-                mountTrailer();
+                /* A página abre na capa — o estado inicial já vem marcado no HTML, então
+                   não há troca visível aqui; resta só corrigir a miniatura se preciso. */
+                paintCover();
             })();
         </script>
     </body>
