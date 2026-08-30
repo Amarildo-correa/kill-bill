@@ -853,7 +853,12 @@
                         cover.hidden = true;
                         endcard.hidden = true;
                         armIdle();
-                    } else cancelIdle();
+                    }
+                    /* Pausar não mexe nas barras: elas ficam como o usuário as deixou.
+                       O timer de repouso que tenha ficado armado é inofensivo, porque
+                       hideBars() desiste quando não há reprodução. Fim de trailer e
+                       contingência têm tratamento próprio, em finishTrailer() e
+                       showFallback(), e continuam chamando cancelIdle(). */
                     if (e.data === YT.PlayerState.ENDED) finishTrailer();
                 }
 
@@ -1258,7 +1263,7 @@
                     dialog.classList.remove("is-idle");
                     idleTimer = setTimeout(hideBars, IDLE_MS);
                 }
-                /* Traz as barras de volta e as mantém: pausa, fim, erro. */
+                /* Traz as barras de volta e as mantém: fim de trailer, erro. */
                 function cancelIdle() {
                     clearTimeout(idleTimer);
                     idleTimer = null;
