@@ -22,6 +22,8 @@
                 --bone: #ece6d8;
                 --smoke: #8e887a;
                 --sun: #ffd100;
+                /* preto das barras sobrepostas ao quadro */
+                --curtain: #060504;
 
                 --display: "Archivo", system-ui, sans-serif;
                 --body: "Karla", system-ui, sans-serif;
@@ -438,9 +440,10 @@
             }
 
             /* ---------- barras sobrepostas ao quadro ----------
-   Título e controles flutuam sobre o vídeo para cobrir o cabeçalho e o rodapé
-   de sugestões que o YouTube desenha quando a reprodução está pausada. O
-   container não recebe ponteiro: a faixa transparente do gradiente continua
+   Título e controles flutuam sobre o vídeo para cobrir o alto e a base do quadro,
+   onde o YouTube desenha cabeçalho, marca e rodapé. A barra de título é preta
+   sólida; a de controles mantém o gradiente, que a deixa assentar sobre a imagem.
+   Nenhum dos dois containers recebe ponteiro: o que não for botão continua
    entregando o clique ao escudo, que pausa e retoma o vídeo. */
             .dialog__bar,
             .ctrl {
@@ -459,11 +462,13 @@
             .ctrl[data-disabled="true"] > * {
                 pointer-events: none;
             }
+            /* Preto sólido, sem gradiente: a faixa de fade ainda deixava passar o
+               título e a marca que o YouTube desenha no alto do quadro. */
             .dialog__bar {
                 top: 0;
                 border-bottom: 0;
                 padding-bottom: 32px;
-                background: linear-gradient(180deg, rgba(6, 5, 4, 0.97) 0%, rgba(6, 5, 4, 0.94) 52%, rgba(6, 5, 4, 0) 100%);
+                background: var(--curtain);
             }
             .ctrl {
                 bottom: 0;
@@ -817,9 +822,16 @@
                         frame.setAttribute("tabindex", "-1");
                         frame.setAttribute("aria-hidden", "true");
                     } catch (err) {}
-                    /* A capa sai só agora: até aqui ela é o fundo do spinner. */
                     dialog.classList.remove("is-starting");
-                    cover.hidden = true;
+                    /* A capa NÃO sai aqui. Pronto não é o mesmo que tocando: se o
+                       navegador recusar o play — política de autoplay, o caso comum em
+                       aparelho de mão e em janela estreita —, esconder a capa agora
+                       deixaria o quadro do YouTube à mostra com a tela inicial inteira:
+                       título, canal, botão vermelho no meio e a marca no rodapé. Nada
+                       disso está ao alcance dos gradientes das barras, que só cobrem
+                       topo e base. Quem tira a capa é o primeiro PLAYING, em
+                       onPlayerState; até lá a miniatura cobre o quadro e o usuário tem
+                       o play dos controles próprios para iniciar por conta. */
                     mask.hidden = true;
                     controls.dataset.disabled = "false";
                     try {
@@ -836,9 +848,13 @@
                     toggleIcon.textContent = playing ? "pause" : "play_arrow";
                     toggleBtn.setAttribute("aria-label", playing ? "Pausar" : "Reproduzir");
                     if (playing) {
+                        /* Só aqui existe imagem em movimento por baixo: é o momento
+                           seguro de descobrir o quadro. */
+                        cover.hidden = true;
                         endcard.hidden = true;
                         armIdle();
-                    } else cancelIdle();
+                    } else if (e.data === YT.PlayerState.PAUSED) hideBarsOnPause();
+                    else cancelIdle();
                     if (e.data === YT.PlayerState.ENDED) finishTrailer();
                 }
 
@@ -854,6 +870,9 @@
                     paintSeek();
                     toggleIcon.textContent = "play_arrow";
                     endcard.hidden = false;
+                    /* Reafirmado depois de mostrar o endcard: o PAUSED disparado pelo
+                       pauseVideo() acima chega assíncrono e pode tentar recolher as barras. */
+                    cancelIdle();
                 }
 
                 /* ---------------------------------------------------------------
@@ -1243,7 +1262,23 @@
                     dialog.classList.remove("is-idle");
                     idleTimer = setTimeout(hideBars, IDLE_MS);
                 }
-                /* Traz as barras de volta e as mantém: pausa, fim, erro. */
+                /* Pausado, o quadro fica limpo. O embed não desenha nada por baixo — o
+                   overlay dele depende de ponteiro dentro do iframe, que nunca chega —,
+                   então as barras próprias também saem e o frame congelado fica inteiro
+                   à vista. Reusa is-idle: o efeito desejado é o mesmo (opacidade zero,
+                   sem ponteiro, e de volta a quem chega por teclado). Só o clique no
+                   quadro, que o escudo trata, retoma e traz tudo de volta. */
+                function hideBarsOnPause() {
+                    clearTimeout(idleTimer);
+                    idleTimer = null;
+                    barsPinned = false;
+                    /* Fim de trailer e contingência têm painel próprio e precisam dos
+                       controles à mão: ali a pausa não recolhe nada. */
+                    if (!endcard.hidden || !fallback.hidden) return;
+                    dialog.classList.add("is-idle");
+                }
+
+                /* Traz as barras de volta e as mantém: fim, erro. */
                 function cancelIdle() {
                     clearTimeout(idleTimer);
                     idleTimer = null;

@@ -30,7 +30,7 @@ O JS quase nunca mexe em `style`; ele liga e desliga classes e o CSS decide o re
 
 - `is-cover` — estado inicial (já vem no HTML). Mostra só a miniatura e o botão grande; o resto da barra de controles fica oculto.
 - `is-starting` — entre o toque e o `onReady`: a capa continua sob um véu translúcido para o quadro não piscar preto.
-- `is-idle` — barras recolhidas por inatividade.
+- `is-idle` — barras recolhidas. Entra por dois caminhos: inatividade durante a reprodução (`armIdle()` → `hideBars()`) e pausa (`hideBarsOnPause()`, imediato).
 - `is-fs` — contingência de tela cheia por CSS quando a Fullscreen API não é concedida.
 - `is-rotated` — giro de 90° por CSS quando `screen.orientation.lock` falha.
 
@@ -48,6 +48,8 @@ A página carrega apenas a miniatura (`i.ytimg.com/vi/<ID>/maxresdefault.jpg`, c
 
 `mountTrailer()` → `loadApi()` (promise única, memoizada em `apiPromise`) → `createTrailerPlayer()` → `onPlayerReady()`. Um `watchdog` de 6500 ms e um timeout de 8000 ms no carregamento da API levam a `showFallback()`. `destroyTrailerPlayer()` destrói o player e recria o `<div id="trailer-player">` do zero, porque a API do YouTube substitui esse nó pelo iframe.
 
+**A capa só é escondida no primeiro `PLAYING`, nunca em `onPlayerReady()`** — pronto não é o mesmo que tocando. Ver "Detalhes fáceis de quebrar".
+
 `isHttp` (protocolo `http`/`https`) governa duas escolhas: `playerVars.origin` só é enviado sob HTTP, e o host é `youtube-nocookie.com` sob HTTP / `youtube.com` fora dele.
 
 ### Vedação: a interface do YouTube nunca é visível nem alcançável
@@ -56,7 +58,8 @@ A única interação com o YouTube que o usuário pode alcançar é play/pause. 
 
 - **Ponteiro** — `pointer-events: none` no `.video__stage` tira o iframe do hit-testing; `#trailer-shield` por cima é a segunda barreira e é quem trata o play/pause. Efeito colateral desejável: o clique direito abre o menu do documento pai, nunca o "Copiar URL do vídeo" do YouTube.
 - **Foco** — `onPlayerReady()` marca o iframe com `tabindex="-1"` e `aria-hidden="true"`. `pointer-events` não barra foco: sem isso o `Tab` entra no documento do YouTube e, a partir dali, os atalhos `f`/`Escape` daqui deixam de receber tecla.
-- **Pixel** — as barras cobrem topo e base com gradientes, o `scale(1.06)` no iframe corta as bordas, `IDLE_MS` só recolhe as barras depois que o cabeçalho do YouTube já saiu, e `finishTrailer()` encerra antes da tela de sugestões do fim.
+- **Pixel** — a barra de título é preta sólida (`--curtain`), porque a faixa de fade do gradiente antigo ainda deixava passar o título e a marca que o YouTube desenha no alto; a barra de controles mantém o gradiente. Somam-se o `scale(1.06)` no iframe cortando as bordas, `IDLE_MS` recolhendo as barras só depois que o cabeçalho do YouTube já saiu, e `finishTrailer()` encerrando antes da tela de sugestões do fim.
+- **Estado** — a capa cobre o quadro até haver reprodução de fato, o que fecha o único estado em que o embed mostra a interface inteira (ver abaixo).
 
 **Não existe painel cobrindo o quadro na pausa, e não deve ser adicionado.** Foi testado: o overlay de pausa do YouTube (cabeçalho, marca, grade de sugestões) depende de evento de mouse nascido **dentro** do iframe, e `pointer-events: none` garante que nenhum chegue lá — a pausa via `postMessage` não conta como interação. Medição em Chrome e WebKit, 25 s pausado: capturas byte a byte idênticas, quadro limpo. Ou seja, a barreira de ponteiro já cobre esse vetor de graça. Um painel opaco ali só produz tela preta ao pausar, escondendo o frame do filme sem esconder nada do YouTube. `rel: 0` apenas restringe a grade ao mesmo canal e `modestbranding` foi descontinuado em 2023 — não conte com nenhum dos dois.
 
@@ -78,7 +81,9 @@ Para tela cheia em geral há três rotas encadeadas: `requestFullscreen` no `.di
 ## Detalhes fáceis de quebrar
 
 - **`paintSeek()`**: a barra de posição pinta o trecho percorrido com um gradiente de duas paradas no mesmo ponto (`--fill`), porque WebKit/Blink não têm pseudo-elemento de progresso. **Toda escrita em `seek.value` precisa chamar `paintSeek()`**, senão o preenchimento congela.
+- **A capa só sai no primeiro `PLAYING`, nunca em `onPlayerReady()`.** Pronto não é tocando: se o navegador recusar o `playVideo()` — política de autoplay, o caso comum em aparelho de mão e janela estreita —, esconder a capa em `onReady` deixa o quadro exposto com a tela inicial do YouTube: título, nome do canal, botão vermelho no meio e a marca no rodapé. O botão central e a marca não estão ao alcance das barras, que só cobrem topo e base; nenhum ajuste de opacidade nelas resolve isso. Com a capa no lugar, quem não conseguiu autoplay simplesmente toca no play dos controles próprios.
 - **`finishTrailer()`** pausa e volta ao início ~1,1 s antes do fim para a tela de sugestões do YouTube nunca aparecer. Não substituir por confiar apenas no evento `ENDED`.
+- **Pausado, as barras somem e o movimento do mouse não as traz de volta.** É deliberado: o embed não desenha nada por baixo, então o quadro fica com o frame congelado inteiro à vista. Quem retoma é o clique no quadro, que o escudo trata; o teclado ainda alcança as barras pelo `:has(:focus-visible)`. `hideBarsOnPause()` não age quando o endcard ou a contingência estão visíveis, porque ali os controles precisam estar à mão — e `finishTrailer()` reafirma `cancelIdle()` depois de mostrar o endcard, já que o `PAUSED` do `pauseVideo()` chega assíncrono e tentaria recolher.
 - **`IDLE_MS = 4000`** (3000 do overlay do YouTube + 1000 de folga): as barras próprias só recuam depois que o cabeçalho do YouTube já saiu. Encurtar esse valor expõe a interface do YouTube.
 - **`is-rotated` usa `svh`/`svw`, nunca `dvh`/`dvw`** — a unidade dinâmica oscila enquanto a barra do navegador encolhe e vira tremor de layout no overlay girado.
 - Trocar o vídeo é trocar `VIDEO_ID` no JS **e** o `src` literal da miniatura no HTML (mais os títulos em `#dialog-name` e `#cover-name`).
