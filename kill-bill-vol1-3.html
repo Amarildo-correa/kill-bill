@@ -817,11 +817,15 @@
                 transform-origin: top left;
                 transform: rotate(90deg);
             }
-            @supports (height: 100dvw) {
+            /* svh/svw e não dvh/dvw: a unidade dinâmica muda de valor enquanto a barra
+               retrátil do navegador encolhe e cresce, e num overlay girado isso vira
+               tremor de layout no meio do gesto. A unidade small trava no menor
+               tamanho — a barra nunca cobre nada e a medida não oscila. */
+            @supports (height: 100svw) {
                 .dialog.is-rotated {
-                    left: 100dvw;
-                    width: 100dvh;
-                    height: 100dvw;
+                    left: 100svw;
+                    width: 100svh;
+                    height: 100svw;
                 }
             }
 
