@@ -30,7 +30,7 @@ O JS quase nunca mexe em `style`; ele liga e desliga classes e o CSS decide o re
 
 - `is-cover` — estado inicial (já vem no HTML). Mostra só a miniatura e o botão grande; o resto da barra de controles fica oculto.
 - `is-starting` — entre o toque e o `onReady`: a capa continua sob um véu translúcido para o quadro não piscar preto.
-- `is-idle` — barras recolhidas. Entra por dois caminhos: inatividade durante a reprodução (`armIdle()` → `hideBars()`) e pausa (`hideBarsOnPause()`, imediato).
+- `is-idle` — barras recolhidas por inatividade.
 - `is-fs` — contingência de tela cheia por CSS quando a Fullscreen API não é concedida.
 - `is-rotated` — giro de 90° por CSS quando `screen.orientation.lock` falha.
 
@@ -83,7 +83,6 @@ Para tela cheia em geral há três rotas encadeadas: `requestFullscreen` no `.di
 - **`paintSeek()`**: a barra de posição pinta o trecho percorrido com um gradiente de duas paradas no mesmo ponto (`--fill`), porque WebKit/Blink não têm pseudo-elemento de progresso. **Toda escrita em `seek.value` precisa chamar `paintSeek()`**, senão o preenchimento congela.
 - **A capa só sai no primeiro `PLAYING`, nunca em `onPlayerReady()`.** Pronto não é tocando: se o navegador recusar o `playVideo()` — política de autoplay, o caso comum em aparelho de mão e janela estreita —, esconder a capa em `onReady` deixa o quadro exposto com a tela inicial do YouTube: título, nome do canal, botão vermelho no meio e a marca no rodapé. O botão central e a marca não estão ao alcance das barras, que só cobrem topo e base; nenhum ajuste de opacidade nelas resolve isso. Com a capa no lugar, quem não conseguiu autoplay simplesmente toca no play dos controles próprios.
 - **`finishTrailer()`** pausa e volta ao início ~1,1 s antes do fim para a tela de sugestões do YouTube nunca aparecer. Não substituir por confiar apenas no evento `ENDED`.
-- **Pausado, as barras somem e o movimento do mouse não as traz de volta.** É deliberado: o embed não desenha nada por baixo, então o quadro fica com o frame congelado inteiro à vista. Quem retoma é o clique no quadro, que o escudo trata; o teclado ainda alcança as barras pelo `:has(:focus-visible)`. `hideBarsOnPause()` não age quando o endcard ou a contingência estão visíveis, porque ali os controles precisam estar à mão — e `finishTrailer()` reafirma `cancelIdle()` depois de mostrar o endcard, já que o `PAUSED` do `pauseVideo()` chega assíncrono e tentaria recolher.
 - **`IDLE_MS = 4000`** (3000 do overlay do YouTube + 1000 de folga): as barras próprias só recuam depois que o cabeçalho do YouTube já saiu. Encurtar esse valor expõe a interface do YouTube.
 - **`is-rotated` usa `svh`/`svw`, nunca `dvh`/`dvw`** — a unidade dinâmica oscila enquanto a barra do navegador encolhe e vira tremor de layout no overlay girado.
 - Trocar o vídeo é trocar `VIDEO_ID` no JS **e** o `src` literal da miniatura no HTML (mais os títulos em `#dialog-name` e `#cover-name`).

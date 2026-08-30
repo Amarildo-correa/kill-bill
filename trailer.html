@@ -853,8 +853,7 @@
                         cover.hidden = true;
                         endcard.hidden = true;
                         armIdle();
-                    } else if (e.data === YT.PlayerState.PAUSED) hideBarsOnPause();
-                    else cancelIdle();
+                    } else cancelIdle();
                     if (e.data === YT.PlayerState.ENDED) finishTrailer();
                 }
 
@@ -870,9 +869,6 @@
                     paintSeek();
                     toggleIcon.textContent = "play_arrow";
                     endcard.hidden = false;
-                    /* Reafirmado depois de mostrar o endcard: o PAUSED disparado pelo
-                       pauseVideo() acima chega assíncrono e pode tentar recolher as barras. */
-                    cancelIdle();
                 }
 
                 /* ---------------------------------------------------------------
@@ -1262,23 +1258,7 @@
                     dialog.classList.remove("is-idle");
                     idleTimer = setTimeout(hideBars, IDLE_MS);
                 }
-                /* Pausado, o quadro fica limpo. O embed não desenha nada por baixo — o
-                   overlay dele depende de ponteiro dentro do iframe, que nunca chega —,
-                   então as barras próprias também saem e o frame congelado fica inteiro
-                   à vista. Reusa is-idle: o efeito desejado é o mesmo (opacidade zero,
-                   sem ponteiro, e de volta a quem chega por teclado). Só o clique no
-                   quadro, que o escudo trata, retoma e traz tudo de volta. */
-                function hideBarsOnPause() {
-                    clearTimeout(idleTimer);
-                    idleTimer = null;
-                    barsPinned = false;
-                    /* Fim de trailer e contingência têm painel próprio e precisam dos
-                       controles à mão: ali a pausa não recolhe nada. */
-                    if (!endcard.hidden || !fallback.hidden) return;
-                    dialog.classList.add("is-idle");
-                }
-
-                /* Traz as barras de volta e as mantém: fim, erro. */
+                /* Traz as barras de volta e as mantém: pausa, fim, erro. */
                 function cancelIdle() {
                     clearTimeout(idleTimer);
                     idleTimer = null;
