@@ -148,36 +148,26 @@
                 cursor: pointer;
             }
 
-            /* ---------- iPhone: o toque precisa alcançar o embed ----------
-               O fullscreen nativo do iOS só é concedido a um gesto nascido
-               dentro do iframe — playVideo() por postMessage não carrega a
-               ativação do usuário através da fronteira de origem. Por isso, e
-               só neste aparelho, o escudo sai da frente e a camada do player
-               volta a receber toque. Os controles próprios continuam por cima
-               (z-index 6), então nada se perde além do toque no meio do quadro. */
-            .ios-phone .video__stage {
-                pointer-events: auto;
-            }
-            .ios-phone .video__shield,
-            .ios-phone #trailer-fullscreen {
-                display: none;
-            }
-            .video__hint {
+            /* ---------- painel de pausa ----------
+               Pausado, o YouTube volta a desenhar o cabeçalho e a grade de
+               sugestões, e a grade ocupa o meio do quadro — justo a faixa que os
+               gradientes das barras não alcançam. rel:0 não remove essa grade,
+               apenas a restringe ao mesmo canal, então o único jeito de não
+               mostrá-la é cobrir o quadro inteiro. Fica abaixo das barras
+               (z-index 6) e não recebe ponteiro: o clique no meio do quadro
+               precisa seguir até o escudo para retomar a reprodução. */
+            .video__paused {
                 position: absolute;
-                left: 50%;
-                bottom: 22%;
-                transform: translateX(-50%);
-                z-index: 5;
-                margin: 0;
-                padding: 0.55rem 0.9rem;
+                inset: 0;
+                z-index: 4;
+                display: none;
+                background: #0a0906;
                 pointer-events: none;
-                background: rgba(12, 11, 9, 0.88);
-                color: var(--bone);
-                font-family: var(--mono);
-                font-size: 0.68rem;
-                letter-spacing: 0.14em;
-                text-transform: uppercase;
-                text-align: center;
+            }
+            /* Sem transição de propósito: um fade deixaria a grade do YouTube à vista
+               durante a entrada, que é exatamente o que este painel existe para esconder. */
+            .dialog.is-paused .video__paused {
+                display: block;
             }
 
             .endcard {
@@ -667,7 +657,7 @@
                     <img class="video__cover-img" id="trailer-cover-img" src="https://i.ytimg.com/vi/Wv3kZxK9dwA/maxresdefault.jpg" alt="" decoding="async" fetchpriority="high" />
                 </div>
                 <div class="video__shield" id="trailer-shield" aria-hidden="true"></div>
-                <p class="video__hint" id="trailer-hint" hidden>Toque no vídeo para assistir em tela cheia</p>
+                <div class="video__paused" id="trailer-paused" aria-hidden="true"></div>
                 <div class="endcard" id="trailer-endcard" hidden>
                     <p class="endcard__t">Fim do trailer</p>
                     <button type="button" class="endcard__btn" id="trailer-replay">
@@ -756,15 +746,11 @@
                 var seek = document.getElementById("trailer-seek");
                 var volume = document.getElementById("trailer-volume");
                 var timeEl = document.getElementById("trailer-time");
-                var hint = document.getElementById("trailer-hint");
                 var cover = document.getElementById("trailer-cover");
                 var coverImg = document.getElementById("trailer-cover-img");
                 var coverText = document.getElementById("cover-text");
                 var fsBtn = document.getElementById("trailer-fullscreen");
                 var fsIcon = document.getElementById("fullscreen-icon");
-
-                /* Marca o documento uma vez: o CSS decide o resto. */
-                if (isIosPhone()) document.documentElement.classList.add("ios-phone");
 
                 /* ---------------------------------------------------------------
                    3. YouTube IFrame Player API — carregada sob demanda
@@ -800,18 +786,16 @@
                     var vars = {
                         autoplay: 1,
                         controls: 0,
-                        /* No iPhone, playsinline:0 faz o <video> interno do embed pedir
-                           sozinho o fullscreen nativo do sistema assim que a reprodução
-                           começa - sem a interface web do YouTube e sem depender do
-                           botão dele, que exigiria controls:1. Nos demais aparelhos o
-                           vídeo segue no quadro, sob os controles próprios. */
-                        playsinline: isIosPhone() ? 0 : 1,
+                        /* O vídeo fica sempre dentro do quadro, em todo aparelho. O
+                           fullscreen nativo do iOS exigia devolver o toque ao iframe, e
+                           junto com ele voltava a interface do YouTube; tela cheia agora
+                           é sempre a do diálogo, com o giro por CSS como contingência. */
+                        playsinline: 1,
                         rel: 0,
-                        /* fs:1 no iPhone só para o iframe nascer com permissão de
-                           tela cheia; com controls:0 nenhum botão do YouTube é
-                           desenhado, então a interface segue igual. */
-                        fs: isIosPhone() ? 1 : 0,
+                        fs: 0,
                         enablejsapi: 1,
+                        /* Descontinuado pelo YouTube em 2023 e hoje ignorado — mantido por
+                           ser inofensivo. Quem apaga a marca do quadro é controls:0. */
                         modestbranding: 1,
                         iv_load_policy: 3,
                         cc_load_policy: 0,
@@ -841,6 +825,15 @@
                 function onPlayerReady() {
                     ready = true;
                     clearTimeout(watchdog);
+                    /* pointer-events:none barra o ponteiro, não o foco: sem isto o Tab
+                       entra no documento do YouTube, e a partir dali os atalhos daqui
+                       param de receber tecla. O conteúdo é redundante com os controles
+                       próprios, então sai também da árvore de acessibilidade. */
+                    try {
+                        var frame = player.getIframe();
+                        frame.setAttribute("tabindex", "-1");
+                        frame.setAttribute("aria-hidden", "true");
+                    } catch (err) {}
                     /* A capa sai só agora: até aqui ela é o fundo do spinner. */
                     dialog.classList.remove("is-starting");
                     cover.hidden = true;
@@ -859,9 +852,12 @@
                     var playing = e.data === YT.PlayerState.PLAYING;
                     toggleIcon.textContent = playing ? "pause" : "play_arrow";
                     toggleBtn.setAttribute("aria-label", playing ? "Pausar" : "Reproduzir");
+                    /* Só em PAUSED: BUFFERING também não é "playing", mas ali o YouTube
+                       desenha apenas o próprio spinner, e cobrir o quadro a cada seek
+                       viraria piscada. */
+                    dialog.classList.toggle("is-paused", e.data === YT.PlayerState.PAUSED);
                     if (playing) {
                         endcard.hidden = true;
-                        hint.hidden = true;
                         armIdle();
                     } else cancelIdle();
                     if (e.data === YT.PlayerState.ENDED) finishTrailer();
@@ -890,6 +886,7 @@
                     stopTicker();
                     ready = false;
                     dialog.classList.remove("is-starting");
+                    dialog.classList.remove("is-paused");
                     cover.hidden = true;
                     mask.hidden = true;
                     controls.dataset.disabled = "true";
@@ -915,7 +912,7 @@
                     cancelIdle();
                     fallback.hidden = true;
                     endcard.hidden = true;
-                    hint.hidden = !isIosPhone();
+                    dialog.classList.remove("is-paused");
                     mask.hidden = false;
                     controls.dataset.disabled = "true";
                     toggleIcon.textContent = "play_arrow";
@@ -1184,14 +1181,6 @@
                     var touch = (navigator.maxTouchPoints || 0) > 0;
                     var menor = Math.min(window.screen.width || 0, window.screen.height || 0);
                     return coarse && touch && menor > 0 && menor <= 820;
-                }
-
-                /* iPad fica de fora de propósito: ele suporta a Fullscreen API padrão
-                   e se sai melhor com o diálogo próprio em tela cheia. A regra vale
-                   para todo navegador do iPhone, não só o Safari - no iOS todos usam
-                   o mesmo WebKit e herdam este comportamento. */
-                function isIosPhone() {
-                    return /iP(hone|od)/.test(navigator.userAgent || "");
                 }
 
                 function applyRotation() {
