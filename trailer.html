@@ -492,23 +492,23 @@
             /* ---------- ocultação automática das barras ----------
    O YouTube recolhe o próprio cabeçalho por volta de 3s depois do play; as
    barras só saem 1s depois disso, para o quadro nunca ficar exposto na troca. */
+            /* Sumir é suave, aparecer é instantâneo. A transição mora na regra de
+               is-idle, que é o estado de destino ao recolher; ao sair de is-idle o
+               destino não declara transição, então as barras voltam no mesmo quadro.
+               Com fade de entrada, a interface do YouTube fica à vista por baixo
+               durante os milissegundos em que elas ganham opacidade. */
             .dialog__bar,
             .ctrl {
-                transition: opacity 0.35s ease;
+                transition: none;
             }
             .dialog.is-idle .dialog__bar,
             .dialog.is-idle .ctrl {
                 opacity: 0;
+                transition: opacity 0.35s ease;
             }
             .dialog.is-idle .dialog__bar > *,
             .dialog.is-idle .ctrl > * {
                 pointer-events: none;
-            }
-            /* O cursor some junto com as barras, mas só enquanto o vídeo corre. Pausado
-               is-idle continua valendo, e aí quem passa o mouse sobre o quadro precisa
-               vê-lo para saber onde vai clicar para retomar. */
-            .dialog.is-idle.is-playing .video__shield {
-                cursor: none;
             }
             /* Quem chega por teclado traz a barra de volta mesmo em repouso. */
             .dialog.is-idle .dialog__bar:has(:focus-visible),
@@ -624,7 +624,9 @@
 
             @media (prefers-reduced-motion: reduce) {
                 .dialog__bar,
-                .ctrl {
+                .ctrl,
+                .dialog.is-idle .dialog__bar,
+                .dialog.is-idle .ctrl {
                     transition: none;
                 }
                 .cover__play .material-symbols-outlined {
@@ -850,9 +852,6 @@
                     var playing = e.data === YT.PlayerState.PLAYING;
                     toggleIcon.textContent = playing ? "pause" : "play_arrow";
                     toggleBtn.setAttribute("aria-label", playing ? "Pausar" : "Reproduzir");
-                    /* Quem consome isto é só o CSS, para esconder o cursor sobre o quadro
-                       durante a reprodução sem escondê-lo na pausa. */
-                    dialog.classList.toggle("is-playing", playing);
                     if (playing) {
                         /* Só aqui existe imagem em movimento por baixo: é o momento
                            seguro de descobrir o quadro. */
@@ -891,7 +890,6 @@
                     stopTicker();
                     ready = false;
                     dialog.classList.remove("is-starting");
-                    dialog.classList.remove("is-playing");
                     cover.hidden = true;
                     mask.hidden = true;
                     controls.dataset.disabled = "true";
@@ -917,7 +915,6 @@
                     cancelIdle();
                     fallback.hidden = true;
                     endcard.hidden = true;
-                    dialog.classList.remove("is-playing");
                     mask.hidden = false;
                     controls.dataset.disabled = "true";
                     toggleIcon.textContent = "play_arrow";
